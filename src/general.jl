@@ -45,20 +45,9 @@ function rm_strat!(df::DataFrame; col::Union{Int, Symbol}=1)
 end
 
 
-"""
-Given a dataframe with a column that has a pvalue column, perform
-Benjamini Hochberch correction to generate q value column with given Q.
-"""
-function qvalue!(df::DataFrame, q::Float64=0.2; pcol::Symbol=:p_value, qcol::Symbol=:q_value)
-    ranks = invperm(sortperm(map(x->x,df[pcol])))
-    m = length(ranks)
-    df[qcol] = [i / m * q for i in eachindex(df[pcol])]
-end
-
-
-
-function permanova(dm::DistanceMatrix, metadata::AbstractVector, nperm::Int=999; filter=fill(true, length(metadata)))
-    length(dm.samples) != length(metadata) && error("Metadata does not match the size of distance matrix")
+function permanova(dm::Array{<:Real,2}, metadata::AbstractVector, nperm::Int=999; filter=fill(true, length(metadata)))
+    size(dm,1) != size(dm,2) && throw(ArgumentError("dm must be symetrical distance matrix"))
+    size(dm,2) != length(metadata) && throw(ArgumentError("Metadata does not match the size of distance matrix"))
 
     r_dm = dm.dm[filter, filter]
     metadata = metadata[filter]
@@ -85,14 +74,14 @@ PanPhlAn Utils
 
 function panphlan_calcs(df::DataFrame)
     abun = abundancetable(df)
-    dm = getdm(df, Jaccard())
-    rowdm = getrowdm(df, Jaccard())
-    col_clust = hclust(dm.dm, :single)
-    row_clust = hclust(rowdm.dm, :single)
-    optimalorder!(col_clust, dm.dm)
-    optimalorder!(row_clust, rowdm.dm)
+    dm = pairwise(Jaccard(), abun, dims=2)
+    rowdm = pairwise(Jaccard(), abun, dims=1)
+    col_clust = hclust(dm, :single)
+    row_clust = hclust(rowdm, :single)
+    optimalorder!(col_clust, dm)
+    optimalorder!(row_clust, rowdm)
 
-    pco = pcoa(dm)
+    mds = fit(MDS, dm, distances=true)
 
-    return abun, dm, col_clust, row_clust, pco
+    return abun, dm, col_clust, row_clust, mds
 end
